@@ -8,6 +8,7 @@ from app.bungie.manifest import ManifestManager
 from app.auth import router as auth_router
 from app.api.loadout import router as loadout_router
 from app.api.chat import router as chat_router
+from app.api.capsule import router as capsule_router
 
 manifest_manager = ManifestManager()
 
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(loadout_router)
 app.include_router(chat_router)
+app.include_router(capsule_router)
 
 @app.get("/")
 def read_root():

@@ -66,3 +66,102 @@ class BungieAPI:
             )
             res.raise_for_status()
             return res.json()["Response"]
+
+    async def get_historical_stats(self, membership_type: int, destiny_membership_id: str, access_token: str) -> dict:
+        headers = {
+            "X-API-Key": self.api_key,
+            "Authorization": f"Bearer {access_token}",
+        }
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"{BUNGIE_ROOT}/Platform/Destiny2/{membership_type}/Account/{destiny_membership_id}/Stats/",
+                headers=headers,
+                timeout=30.0,
+            )
+            res.raise_for_status()
+            return res.json()["Response"]
+
+    async def get_activity_history(
+        self,
+        membership_type: int,
+        destiny_membership_id: str,
+        character_id: str,
+        access_token: str,
+        mode: int = 4,
+        count: int = 250,
+        page: int = 0,
+    ) -> dict:
+        headers = {
+            "X-API-Key": self.api_key,
+            "Authorization": f"Bearer {access_token}",
+        }
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"{BUNGIE_ROOT}/Platform/Destiny2/{membership_type}/Account/{destiny_membership_id}"
+                f"/Character/{character_id}/Stats/Activities/"
+                f"?mode={mode}&count={count}&page={page}",
+                headers=headers,
+                timeout=30.0,
+            )
+            res.raise_for_status()
+            return res.json().get("Response", {})
+
+    async def get_monthly_stats(
+        self,
+        membership_type: int,
+        destiny_membership_id: str,
+        character_id: str,
+        access_token: str,
+    ) -> dict:
+        """Monthly PvE activity counts per character — used to build the era activity chart."""
+        headers = {
+            "X-API-Key": self.api_key,
+            "Authorization": f"Bearer {access_token}",
+        }
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"{BUNGIE_ROOT}/Platform/Destiny2/{membership_type}/Account/{destiny_membership_id}"
+                f"/Character/{character_id}/Stats/?modes=7&periodType=2&groups=1",
+                headers=headers,
+                timeout=30.0,
+            )
+            res.raise_for_status()
+            return res.json().get("Response", {})
+
+    async def get_character_stats(
+        self,
+        membership_type: int,
+        destiny_membership_id: str,
+        character_id: str,
+        access_token: str,
+    ) -> dict:
+        """Per-character stats with explicit modes. The account-level endpoint only returns
+        allPvE/allPvP; this endpoint exposes raid, nightfall, allStrikes etc."""
+        headers = {
+            "X-API-Key": self.api_key,
+            "Authorization": f"Bearer {access_token}",
+        }
+        modes = "4,16,17,18,46,47"
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"{BUNGIE_ROOT}/Platform/Destiny2/{membership_type}/Account/{destiny_membership_id}"
+                f"/Character/{character_id}/Stats/?modes={modes}",
+                headers=headers,
+                timeout=30.0,
+            )
+            res.raise_for_status()
+            return res.json()["Response"]
+
+    async def get_profile_summary(self, membership_type: int, destiny_membership_id: str, access_token: str) -> dict:
+        headers = {
+            "X-API-Key": self.api_key,
+            "Authorization": f"Bearer {access_token}",
+        }
+        # 100 = profile metadata (dateLastPlayed), 200 = characters (titleRecordHash)
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                f"{BUNGIE_ROOT}/Platform/Destiny2/{membership_type}/Profile/{destiny_membership_id}/?components=100,200",
+                headers=headers,
+            )
+            res.raise_for_status()
+            return res.json()["Response"]

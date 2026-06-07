@@ -65,6 +65,18 @@ class ManifestManager:
             row = await cursor.fetchone()
             return row[0] if row else None
 
+    async def get_all_season_definitions(self):
+        """Return all season definitions with a positive seasonNumber (for capsule timeline)."""
+        if not self.db_path:
+            return []
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT json FROM DestinySeasonDefinition "
+                "WHERE CAST(json_extract(json, '$.seasonNumber') AS INTEGER) > 0"
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]
+
     async def get_all_items_with_flavor(self):
         """Return JSON rows for items that have non-empty flavorText."""
         if not self.db_path:
@@ -110,6 +122,17 @@ class ManifestManager:
             cursor = await db.execute("SELECT json FROM DestinyLoreDefinition")
             rows = await cursor.fetchall()
             return [row[0] for row in rows]
+
+    async def get_record(self, record_hash: int):
+        if not self.db_path:
+            return None
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT json FROM DestinyRecordDefinition WHERE id = ? OR id = ?",
+                (record_hash, record_hash - 4294967296),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else None
 
     async def get_item(self, item_hash: int):
         if not self.db_path:

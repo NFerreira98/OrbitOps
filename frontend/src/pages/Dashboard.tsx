@@ -5,6 +5,8 @@ import { twMerge } from 'tailwind-merge';
 import { LogOut, Loader2, Send } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { GearCard, type GearItem } from '../components/GearCard';
+import { TimeCapsule } from '../components/TimeCapsule';
+import type { CapsuleData } from '../types/capsule';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -35,7 +37,7 @@ const WEAPON_SLOTS = ['Kinetic', 'Energy', 'Power'];
 const ARMOR_SLOTS  = ['Helmet', 'Gauntlets', 'Chest', 'Legs', 'Class Item'];
 
 export function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'roster' | 'fireside' | 'fonts'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'fireside' | 'capsule' | 'fonts'>('roster');
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
   const [loadoutLoading, setLoadoutLoading] = useState(false);
@@ -47,6 +49,11 @@ export function Dashboard() {
   const [chatStreaming, setChatStreaming] = useState(false);
   const [chatMode, setChatMode] = useState<'story' | 'tldr'>('story');
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Capsule state
+  const [capsuleData, setCapsuleData] = useState<CapsuleData | null>(null);
+  const [capsuleLoading, setCapsuleLoading] = useState(false);
+  const [capsuleError, setCapsuleError] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const { accessToken, displayName, primaryMembership, logout, isAuthenticated } = useAuthStore();
@@ -82,6 +89,31 @@ export function Dashboard() {
 
     fetchLoadout();
   }, [activeTab, accessToken, primaryMembership, characters.length]);
+
+  useEffect(() => {
+    if (activeTab !== 'capsule' || capsuleData || !accessToken || !primaryMembership) return;
+    const fetch_capsule = async () => {
+      setCapsuleLoading(true);
+      setCapsuleError(null);
+      try {
+        const { membershipType, membershipId } = primaryMembership;
+        const name = encodeURIComponent(
+          primaryMembership.bungieGlobalDisplayName ?? primaryMembership.displayName ?? 'Guardian'
+        );
+        const res = await fetch(
+          `/api/capsule?membership_type=${membershipType}&membership_id=${membershipId}&guardian_name=${name}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!res.ok) throw new Error(`Capsule fetch failed: ${res.status}`);
+        setCapsuleData(await res.json());
+      } catch (err: any) {
+        setCapsuleError(err.message ?? 'Failed to load capsule.');
+      } finally {
+        setCapsuleLoading(false);
+      }
+    };
+    fetch_capsule();
+  }, [activeTab, accessToken, primaryMembership, capsuleData]);
 
   const handleLogout = () => { logout(); navigate('/'); };
 
@@ -180,7 +212,7 @@ export function Dashboard() {
             OrbitOps<span className="text-slate-500 ml-2 font-rajdhani">// Terminal</span>
           </h1>
           <nav className="flex space-x-4 items-end">
-            {(['roster', 'fireside', 'fonts'] as const).map((tab) => (
+            {(['roster', 'fireside', 'capsule', 'fonts'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -401,6 +433,27 @@ export function Dashboard() {
                 {chatStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── CAPSULE TAB ── */}
+        {activeTab === 'capsule' && (
+          <div>
+            {capsuleLoading && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-500">
+                <Loader2 className="animate-spin" size={24} />
+                <div className="text-center">
+                  <p className="font-rajdhani uppercase tracking-widest text-sm">Compiling your record…</p>
+                  <p className="font-inter text-xs text-slate-600 mt-1">Fetching stats and generating your Ghost's message</p>
+                </div>
+              </div>
+            )}
+            {capsuleError && (
+              <p className="text-red-400 text-sm py-8 text-center font-rajdhani">{capsuleError}</p>
+            )}
+            {!capsuleLoading && !capsuleError && capsuleData && (
+              <TimeCapsule data={capsuleData} />
+            )}
           </div>
         )}
 

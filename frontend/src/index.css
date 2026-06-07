@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-destiny-dark: #0f172a;
+  --color-destiny-accent: #d4af37;
+  --color-destiny-panel: rgba(30, 41, 59, 0.7);
+  --color-destiny-border: rgba(148, 163, 184, 0.2);
+  --color-destiny-ember: rgba(180, 83, 9, 0.25);
+  --color-destiny-ember-border: rgba(217, 119, 6, 0.2);
+  
+  --font-cinzel: 'Cinzel', serif;
+  --font-rajdhani: 'Rajdhani', sans-serif;
+  --font-oswald: 'Oswald', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+  --font-futura: 'Futura', 'Trebuchet MS', Arial, sans-serif;
+}
+
+body {
+  background-color: var(--color-destiny-dark);
+  color: white;
+  margin: 0;
+  /* Subtle hex grid pattern */
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='69' viewBox='0 0 40 69' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 0l20 11.5v23L20 46 0 34.5v-23L20 0zm0 69l20-11.5v-23L20 23 0 34.5v23L20 69z' fill='rgba(255, 255, 255, 0.02)' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
+
+/* Custom utility for sharp cut corners (chamfered) common in Destiny UI */
+.clip-chamfer {
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+.clip-chamfer-reverse {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}

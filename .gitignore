@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+
+# Destiny manifest + vector store (regenerated locally via ingest)
+backend/data/
+
+# SSL certs
+frontend/localhost+1*.pem
+
+# Node
+node_modules/
+dist/
+
+# Misc
+.DS_Store
+*.log

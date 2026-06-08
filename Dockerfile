@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Python backend — serves everything
-FROM python:3.13-slim AS final
+FROM python:3.11-slim AS final
 WORKDIR /app
 
 COPY backend/requirements.txt ./

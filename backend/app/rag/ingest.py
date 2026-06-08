@@ -156,9 +156,18 @@ async def ingest():
         texts = [d[1] for d in batch]
         metadatas = [d[2] for d in batch]
 
-        response = openai_client.embeddings.create(model=EMBED_MODEL, input=texts)
-        embeddings = [item.embedding for item in response.data]
+        for attempt in range(6):
+            try:
+                response = openai_client.embeddings.create(model=EMBED_MODEL, input=texts)
+                break
+            except Exception:
+                if attempt == 5:
+                    raise
+                wait = 2 ** attempt
+                print(f"\n  Rate limited — retrying in {wait}s...")
+                import time; time.sleep(wait)
 
+        embeddings = [item.embedding for item in response.data]
         collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
         print(f"  Embedded {min(i + BATCH_SIZE, total)}/{total}", end="\r")
 

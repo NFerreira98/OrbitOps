@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronDown, ChevronUp, ArrowRight, PlayCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, ArrowRight, PlayCircle } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { PathfinderEntry } from '../types/pathfinder';

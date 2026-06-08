@@ -365,7 +365,7 @@ export function StatsDashboard({ membershipType, membershipId, accessToken }: St
                     style={{ cursor: 'pointer' }} />
                 ))}
               </Pie>
-              <Tooltip formatter={(v: number) => [`${v.toLocaleString()}h`, 'Hours']}
+              <Tooltip formatter={(v) => [`${Number(v).toLocaleString()}h`, 'Hours']}
                 contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', fontSize: 11 }} />
             </PieChart>
             <div className="w-full space-y-1.5 mt-1">
@@ -476,11 +476,11 @@ export function StatsDashboard({ membershipType, membershipId, accessToken }: St
                   tick={{ fontSize: 10, fill: '#64748b', fontFamily: 'Rajdhani, sans-serif' }}
                   tickLine={false} axisLine={false} />
                 <Tooltip
-                  formatter={(v: number) => [v.toLocaleString(), 'Kills']}
+                  formatter={(v) => [Number(v).toLocaleString(), 'Kills']}
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', fontSize: 11 }} />
                 <Bar dataKey="kills" fill="#d4af37" radius={0} maxBarSize={14}>
                   <LabelList dataKey="pct" position="right"
-                    formatter={(v: number) => `${v}%`}
+                    formatter={(v) => `${v}%`}
                     style={{ fontSize: 9, fill: '#64748b', fontFamily: 'Rajdhani, sans-serif' }} />
                 </Bar>
               </BarChart>

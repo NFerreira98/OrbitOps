@@ -216,42 +216,41 @@ export function Dashboard() {
   const selectedChar = characters.find((c) => c.characterId === selectedCharId);
 
   return (
-    <div className="min-h-screen p-6 md:p-10 pl-16 md:pl-24 bg-linear-to-br from-transparent to-slate-900/50">
+    <div className="min-h-screen p-4 md:p-10 md:pl-24 bg-linear-to-br from-transparent to-slate-900/50">
 
-      <header className="mb-10 flex items-end justify-between border-b border-white/10 pb-4">
-        <div className="flex items-end space-x-12">
-          <h1 className="text-3xl font-bold font-cinzel text-destiny-accent drop-shadow-[0_0_10px_rgba(212,175,55,0.4)]">
+      <header className="mb-6 md:mb-10 border-b border-white/10 pb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-2xl md:text-3xl font-bold font-cinzel text-destiny-accent drop-shadow-[0_0_10px_rgba(212,175,55,0.4)]">
             OrbitOps<span className="text-slate-500 ml-2 font-rajdhani">// Terminal</span>
           </h1>
-          <nav className="flex space-x-4 items-end">
-            {(['roster', 'advisor', 'guide', 'vault', 'fireside', 'capsule', 'weekly', 'lookup'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  'uppercase tracking-widest text-sm pb-2 font-rajdhani transition-all border-b-2',
-                  activeTab === tab
-                    ? 'text-white border-destiny-accent'
-                    : 'text-slate-500 border-transparent hover:text-slate-300'
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center gap-4">
+            {guardianName && (
+              <div className="text-right">
+                <p className="text-xs text-slate-500 uppercase tracking-widest">Guardian</p>
+                <p className="font-rajdhani font-semibold text-white tracking-wide">{guardianName}</p>
+              </div>
+            )}
+            <button onClick={handleLogout} title="Log out" className="p-2 text-slate-500 hover:text-destiny-accent transition-colors">
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-4">
-          {guardianName && (
-            <div className="text-right">
-              <p className="text-xs text-slate-500 uppercase tracking-widest">Guardian</p>
-              <p className="font-rajdhani font-semibold text-white tracking-wide">{guardianName}</p>
-            </div>
-          )}
-          <button onClick={handleLogout} title="Log out" className="p-2 text-slate-500 hover:text-destiny-accent transition-colors">
-            <LogOut size={18} />
-          </button>
-        </div>
+        <nav className="flex space-x-4 items-end overflow-x-auto pb-1">
+          {(['roster', 'advisor', 'guide', 'vault', 'fireside', 'capsule', 'weekly', 'lookup'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                'uppercase tracking-widest text-sm pb-2 font-rajdhani transition-all border-b-2 shrink-0',
+                activeTab === tab
+                  ? 'text-white border-destiny-accent'
+                  : 'text-slate-500 border-transparent hover:text-slate-300'
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </nav>
       </header>
 
       <main className="max-w-7xl">

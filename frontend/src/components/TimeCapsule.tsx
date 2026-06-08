@@ -1,12 +1,17 @@
 import { useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { Download, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { CapsuleData, SeasonEntry, EraActivity, MonthlyPoint } from '../types/capsule';
+import type { CapsuleData, SeasonEntry, EraActivity, MonthlyPoint, ArchetypeEntry, FireteamCompanion } from '../types/capsule';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function bungieImg(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  return `/api/proxy-image?url=${encodeURIComponent('https://www.bungie.net' + path)}`;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -64,6 +69,22 @@ function fmtDate(iso: string | null | undefined, style: 'short' | 'long' = 'shor
 
 // ── Small building-block components ───────────────────────────────────────────
 
+function SectionHeader({ label, tone = 'default' }: { label: string; tone?: 'default' | 'amber' | 'subtle' }) {
+  const textColor =
+    tone === 'amber'  ? 'text-amber-500/80' :
+    tone === 'subtle' ? 'text-slate-500'    :
+                        'text-slate-300';
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-destiny-accent/50 font-rajdhani text-xs leading-none">//</span>
+      <span className={cn('font-cinzel text-[10px] tracking-[0.3em] uppercase', textColor)}>
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-white/6" />
+    </div>
+  );
+}
+
 function StatRow({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1.5 border-b border-white/5 last:border-0">
@@ -110,9 +131,7 @@ function EraBarChart({ eraActivity }: { eraActivity: EraActivity[] }) {
   const BAR_MAX_PX = 52;
   return (
     <div>
-      <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-slate-600 mb-3">
-        Era Activity
-      </p>
+      <SectionHeader label="Era Activity" />
       <div className="flex items-end gap-2">
         {eraActivity.map(ea => (
           <div key={ea.era} className="flex flex-col items-center gap-1 flex-1">
@@ -221,6 +240,94 @@ function MonthlyHeatmap({ monthlyData }: { monthlyData: MonthlyPoint[] }) {
   );
 }
 
+// ── Archetype selector ────────────────────────────────────────────────────────
+
+const TIER_CHIP: Record<number, { active: string; idle: string; label: string }> = {
+  5: {
+    active: 'border-amber-500/70 text-amber-400 bg-amber-950/20',
+    idle:   'border-amber-900/30 text-amber-700/50 hover:border-amber-600/50 hover:text-amber-500/80',
+    label:  'Legendary',
+  },
+  4: {
+    active: 'border-purple-500/60 text-purple-300 bg-purple-950/20',
+    idle:   'border-purple-900/30 text-purple-700/50 hover:border-purple-600/50 hover:text-purple-400/80',
+    label:  'Elite',
+  },
+  3: {
+    active: 'border-blue-500/50 text-blue-300 bg-blue-950/20',
+    idle:   'border-blue-900/30 text-blue-700/50 hover:border-blue-600/50 hover:text-blue-400/80',
+    label:  'Veteran',
+  },
+  2: {
+    active: 'border-slate-400/50 text-slate-300 bg-slate-800/30',
+    idle:   'border-slate-700/40 text-slate-600 hover:border-slate-500/60 hover:text-slate-400',
+    label:  'Experienced',
+  },
+  1: {
+    active: 'border-slate-600/40 text-slate-400 bg-slate-800/20',
+    idle:   'border-slate-700/30 text-slate-700 hover:border-slate-600/40 hover:text-slate-500',
+    label:  'Guardian',
+  },
+};
+
+function ArchetypeSelector({
+  archetypes,
+  selected,
+  onSelect,
+}: {
+  archetypes: ArchetypeEntry[];
+  selected: string;
+  onSelect: (name: string) => void;
+}) {
+  const active = archetypes.find(a => a.name === selected);
+
+  return (
+    <div className="w-full max-w-2xl space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-white/5" />
+        <span className="font-cinzel text-[10px] tracking-[0.3em] uppercase text-slate-600">
+          Choose Your Archetype
+        </span>
+        <div className="h-px flex-1 bg-white/5" />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {archetypes.map(arch => {
+          const style = TIER_CHIP[arch.tier] ?? TIER_CHIP[1];
+          const isSelected = arch.name === selected;
+          return (
+            <button
+              key={arch.name}
+              onClick={() => onSelect(arch.name)}
+              className={cn(
+                'px-3 py-1.5 border font-rajdhani text-xs uppercase tracking-widest transition-colors',
+                isSelected ? style.active : style.idle,
+              )}
+            >
+              {arch.name}
+            </button>
+          );
+        })}
+      </div>
+
+      {active && (
+        <div className="flex items-start gap-2.5 pt-1">
+          <span className={cn(
+            'font-rajdhani text-[9px] uppercase tracking-widest px-1.5 py-0.5 border shrink-0 mt-0.5',
+            TIER_CHIP[active.tier]?.active ?? '',
+          )}>
+            {TIER_CHIP[active.tier]?.label ?? 'Tier ' + active.tier}
+          </span>
+          <p className="font-inter text-xs text-slate-500/80 italic leading-relaxed">
+            {active.description}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ── What You Missed accordion ──────────────────────────────────────────────────
 
 function WhatYouMissed({ seasons }: { seasons: SeasonEntry[] }) {
@@ -299,25 +406,28 @@ interface TimeCapsuleProps {
 export function TimeCapsule({ data }: TimeCapsuleProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [selectedArchetype, setSelectedArchetype] = useState(data.archetype);
 
   const handleDownload = async () => {
     if (!cardRef.current) return;
     setExporting(true);
-    setExportError(false);
+    setExportError(null);
     try {
-      const canvas = await html2canvas(cardRef.current, {
+      const dataUrl = await toPng(cardRef.current, {
+        pixelRatio: 2,
         backgroundColor: '#0f172a',
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
+        // fetch all images through the same proxy used for rendering
+        fetchRequestInit: { credentials: 'same-origin' },
       });
       const link = document.createElement('a');
       link.download = `${data.guardianName}-time-capsule.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
-    } catch {
-      setExportError(true);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[TimeCapsule export]', e);
+      setExportError(msg);
     } finally {
       setExporting(false);
     }
@@ -366,7 +476,7 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
 
           <div className="flex items-center gap-2.5 mt-1.5">
             <span className="font-rajdhani text-xs uppercase tracking-widest text-slate-500">
-              {data.archetype}
+              {selectedArchetype}
             </span>
             <span className="text-slate-700 text-xs">·</span>
             <span className="font-rajdhani text-xs text-slate-600 tracking-wider">
@@ -390,16 +500,15 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
                     : 'border-white/10 bg-white/2'
                 )}
                 style={char.emblemBackgroundPath ? {
-                  backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.92), rgba(15,23,42,0.75)), url(https://www.bungie.net${char.emblemBackgroundPath})`,
+                  backgroundImage: `linear-gradient(to right, rgba(15,23,42,0.92), rgba(15,23,42,0.75)), url(${bungieImg(char.emblemBackgroundPath)})`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
                 } : undefined}
               >
                 {char.emblemPath && (
                   <img
-                    src={`https://www.bungie.net${char.emblemPath}`}
+                    src={bungieImg(char.emblemPath)}
                     alt=""
-                    crossOrigin="anonymous"
                     className="w-8 h-8 shrink-0"
                   />
                 )}
@@ -432,9 +541,7 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
         {/* Rarest Achievement spotlight */}
         {data.prestigeAchievement && (
           <div className="border border-amber-800/30 bg-amber-950/10 px-4 py-3 space-y-1.5">
-            <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-amber-700/50">
-              Rarest Achievement
-            </p>
+            <SectionHeader label="Rarest Achievement" tone="amber" />
             <div className="flex items-center gap-2.5">
               <span className="font-cinzel text-sm text-amber-400/90 tracking-wider">
                 {data.prestigeAchievement.name}
@@ -460,9 +567,7 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
         {/* Season Timeline */}
         {hasTimeline && (
           <div>
-            <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-slate-600 mb-3">
-              Journey
-            </p>
+            <SectionHeader label="Your Journey" />
             <div className="flex flex-wrap gap-x-5 gap-y-3">
               {ERA_ORDER.map(era => {
                 const eraSeasons = seasonsByEra[era];
@@ -486,9 +591,7 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-slate-600 mb-2">
-              Field Record
-            </p>
+            <SectionHeader label="Field Record" />
             <StatRow label="Hours" value={fmt(Math.round(data.hoursPlayed))} />
             <StatRow label="Kills" value={fmt(data.totalKills)} />
             <StatRow label="Precision" value={`${data.precisionKillPct.toFixed(1)}%`} />
@@ -497,17 +600,13 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
 
           <div className="space-y-4">
             <div>
-              <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-slate-600 mb-2">
-                Activities
-              </p>
+              <SectionHeader label="Activities" tone="subtle" />
               <StatRow label="Raids" value={fmt(data.raidsCleared)} />
               <StatRow label="Nightfalls" value={fmt(data.nightfallsCleared)} />
               <StatRow label="Strikes" value={fmt(data.strikesCleared)} />
             </div>
             <div>
-              <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-slate-600 mb-2">
-                Crucible
-              </p>
+              <SectionHeader label="Crucible" tone="subtle" />
               <StatRow label="Matches" value={fmt(data.pvpMatches)} />
               <StatRow label="Wins" value={fmt(data.pvpWins)} />
               <StatRow label="K/D" value={data.pvpKD.toFixed(2)} />
@@ -523,9 +622,7 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
         {/* Firsts & Lasts bookends */}
         {hasBookend && (
           <div className="space-y-2">
-            <p className="font-rajdhani text-[10px] tracking-[0.25em] uppercase text-slate-600">
-              Bookends
-            </p>
+            <SectionHeader label="Firsts & Lasts" />
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
               {data.raidBookend.firstCharacterDate && (
                 <BookendRow label="Guardian Born" value={fmtDate(data.raidBookend.firstCharacterDate)} />
@@ -542,23 +639,68 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
           </div>
         )}
 
+        {/* Fireteam Ghosts */}
+        <div className="space-y-2">
+          <SectionHeader label="Who You Played With" />
+          {data.fireteamCompanions.length > 0 ? (
+            <>
+              <div>
+                {data.fireteamCompanions.map((c: FireteamCompanion, i) => (
+                  <div
+                    key={c.displayName}
+                    className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-rajdhani text-[10px] text-slate-700 w-4 shrink-0">{i + 1}</span>
+                      <span className="font-rajdhani text-sm text-slate-300">{c.displayName}</span>
+                    </div>
+                    <span className="font-rajdhani text-xs text-slate-600 tabular-nums">
+                      {c.raidsTogetherSampled} raid{c.raidsTogetherSampled !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {data.fireteamCompanions[0] && (
+                <p className="font-inter text-[10px] text-slate-600/80 italic">
+                  "{data.fireteamCompanions[0].displayName.split('#')[0]} was there more than anyone else."
+                </p>
+              )}
+              <p className="font-rajdhani text-[9px] text-slate-700 tracking-wider">
+                From your {Math.min(30, data.raidBookend.raidCount)} most recent raid completions
+              </p>
+            </>
+          ) : (
+            <p className="font-rajdhani text-xs text-slate-700 italic">
+              {data.raidsCleared > 0
+                ? `Scanning fireteam data… (${data.raidsCleared} raids on record)`
+                : 'No raid history found.'}
+            </p>
+          )}
+        </div>
+
         {/* Ghost narrative */}
         <div className="space-y-3">
           <div className="h-px w-full bg-linear-to-r from-amber-700/50 via-amber-900/20 to-transparent" />
-          <p className="font-cinzel text-[10px] tracking-[0.3em] uppercase text-amber-600/50">
-            // Ghost
-          </p>
+          <SectionHeader label="Ghost" tone="amber" />
           <p className="font-inter text-sm text-amber-50/75 leading-relaxed italic">
             {data.ghostNarrative}
           </p>
         </div>
 
+        {/* The Number That Surprised You */}
+        {data.surpriseStat && (
+          <div className="border-l-2 border-destiny-accent/30 pl-4 space-y-1">
+            <SectionHeader label="The Number" />
+            <p className="font-rajdhani text-base text-slate-200 leading-relaxed tracking-wide">
+              {data.surpriseStat}
+            </p>
+          </div>
+        )}
+
         {/* What Defined You verdict */}
         {data.verdict && (
           <div className="space-y-2 pt-1">
-            <p className="font-cinzel text-[10px] tracking-[0.3em] uppercase text-slate-500/60">
-              // What Defined You
-            </p>
+            <SectionHeader label="What Defined You" />
             <p className="font-rajdhani text-sm text-slate-300/80 leading-relaxed tracking-wide">
               {data.verdict}
             </p>
@@ -576,6 +718,15 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
         </div>
       </div>
 
+      {/* Archetype selector — outside capturable area, selection reflects on card */}
+      {data.qualifiedArchetypes.length > 1 && (
+        <ArchetypeSelector
+          archetypes={data.qualifiedArchetypes}
+          selected={selectedArchetype}
+          onSelect={setSelectedArchetype}
+        />
+      )}
+
       {/* Download button — outside capturable area */}
       <div className="flex flex-col items-center gap-2">
         <button
@@ -589,8 +740,8 @@ export function TimeCapsule({ data }: TimeCapsuleProps) {
           }
         </button>
         {exportError && (
-          <p className="font-rajdhani text-xs text-red-400/70 tracking-wide">
-            Export failed — emblem images may be blocked by CORS. Try again or screenshot manually.
+          <p className="font-rajdhani text-xs text-red-400/70 tracking-wide max-w-sm text-center">
+            Export failed: {exportError}
           </p>
         )}
       </div>

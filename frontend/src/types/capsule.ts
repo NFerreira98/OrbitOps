@@ -43,6 +43,17 @@ export interface PrestigeAchievement {
   tier: number;  // 1–5
 }
 
+export interface ArchetypeEntry {
+  name: string;
+  tier: number;  // 1–5
+  description: string;
+}
+
+export interface FireteamCompanion {
+  displayName: string;
+  raidsTogetherSampled: number;
+}
+
 export interface CapsuleData {
   guardianName: string;
   platform: string;
@@ -69,4 +80,7 @@ export interface CapsuleData {
   monthlyData: MonthlyPoint[];
   prestigeAchievement: PrestigeAchievement | null;
   verdict: string;
+  surpriseStat: string;
+  qualifiedArchetypes: ArchetypeEntry[];
+  fireteamCompanions: FireteamCompanion[];
 }

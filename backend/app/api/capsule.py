@@ -2,8 +2,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Callable
+import httpx
 from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import Response as HTTPResponse
 from pydantic import BaseModel
 import anthropic
 
@@ -44,6 +48,94 @@ SEASON_START_YEAR: dict[int, int] = {
     22: 2023, 23: 2023, 24: 2024, 25: 2024, 26: 2025,
 }
 
+@dataclass
+class ArchetypeDef:
+    name: str
+    tier: int          # 1–5, higher = more prestigious / harder to unlock
+    description: str
+    unlock: Callable[..., bool]  # (raids, nf, pvp_matches, pvp_kd, pvp_wins, hours, titles) -> bool
+
+
+# All archetypes ordered tier-descending. First match in _calculate_archetypes becomes the default.
+ARCHETYPES: list[ArchetypeDef] = [
+    # ── Tier 5: world-class ──────────────────────────────────────────────────
+    ArchetypeDef(
+        "Ghost of the Lighthouse", 5,
+        "Marked by the Lighthouse and battle-hardened across 9 years. Elite in both PvP precision and endgame mastery.",
+        lambda r, nf, pm, kd, pw, h, t: "Flawless" in t and kd >= 1.5 and pm >= 1000,
+    ),
+    ArchetypeDef(
+        "The Ascendant", 5,
+        "A Crucible force at the top of the competitive ladder. Few Guardians sustain this level of kill efficiency at volume.",
+        lambda r, nf, pm, kd, pw, h, t: kd >= 1.5 and pw >= 3000,
+    ),
+    ArchetypeDef(
+        "The Pantheon", 5,
+        "Raider and Nightfall legend in one. A Guardian who committed to endgame at a level most never approach.",
+        lambda r, nf, pm, kd, pw, h, t: r >= 200 and nf >= 500,
+    ),
+    # ── Tier 4: elite ────────────────────────────────────────────────────────
+    ArchetypeDef(
+        "Iron Crucible", 4,
+        "Wins games and wins them decisively. A consistent PvP performer who paired volume with real efficiency.",
+        lambda r, nf, pm, kd, pw, h, t: kd >= 1.5 and pw >= 2000,
+    ),
+    ArchetypeDef(
+        "Endgame Devotee", 4,
+        "Built for the hardest content. Raids and Grandmasters weren't optional — they were the entire point.",
+        lambda r, nf, pm, kd, pw, h, t: r >= 50 and nf >= 200,
+    ),
+    ArchetypeDef(
+        "Vault Conqueror", 4,
+        "100+ raids cleared. The kind of player raid teams were built around.",
+        lambda r, nf, pm, kd, pw, h, t: r >= 100,
+    ),
+    # ── Tier 3: veteran ──────────────────────────────────────────────────────
+    ArchetypeDef(
+        "Crucible Legend", 3,
+        "A Crucible mainstay who backed their K/D with real volume. Not lucky — consistent.",
+        lambda r, nf, pm, kd, pw, h, t: kd >= 2.0 and pm >= 500,
+    ),
+    ArchetypeDef(
+        "Nightfall Master", 3,
+        "The Nightfall grind demands precision, patience, and a team that doesn't quit. You had all three.",
+        lambda r, nf, pm, kd, pw, h, t: nf >= 200,
+    ),
+    ArchetypeDef(
+        "Raid Veteran", 3,
+        "30+ raid clears means you were there for the hard ones — wipes, new mechanics, first clears.",
+        lambda r, nf, pm, kd, pw, h, t: r >= 30,
+    ),
+    ArchetypeDef(
+        "Iron Survivor", 3,
+        "A thousand Crucible wins is a career. You built one.",
+        lambda r, nf, pm, kd, pw, h, t: pw >= 1000,
+    ),
+    ArchetypeDef(
+        "The Titled", 3,
+        "Five or more titles earned. A completionist who finished what others abandoned.",
+        lambda r, nf, pm, kd, pw, h, t: len(t) >= 5,
+    ),
+    # ── Tier 2: experienced ───────────────────────────────────────────────────
+    ArchetypeDef(
+        "The Dedicated", 2,
+        "3,000+ hours is a second life. This was never just a game.",
+        lambda r, nf, pm, kd, pw, h, t: h >= 3000,
+    ),
+    # ── Tier 1: base ─────────────────────────────────────────────────────────
+    ArchetypeDef(
+        "Veteran Guardian", 1,
+        "A Guardian who put in the time and left a real record.",
+        lambda r, nf, pm, kd, pw, h, t: h >= 1000,
+    ),
+    ArchetypeDef(
+        "Guardian", 1,
+        "A Guardian who answered the call.",
+        lambda r, nf, pm, kd, pw, h, t: True,
+    ),
+]
+
+
 # Curated prestige list: title -> (tier 1-5, flavour description)
 # Tier 5 = extremely rare (<5%), tier 1 = uncommon. Tiers are estimates based
 # on community data and Bungie's own rarity indicators.
@@ -76,8 +168,8 @@ PRESTIGE_TITLES: dict[str, tuple[int, str]] = {
 }
 
 GHOST_SYSTEM_PROMPT = (
-    "You are writing two texts about a Destiny 2 Guardian's career. "
-    "Format your response EXACTLY with these two section headers, each on their own line:\n\n"
+    "You are writing three texts about a Destiny 2 Guardian's career. "
+    "Format your response EXACTLY with these three section headers, each on their own line:\n\n"
     "[GHOST]\n"
     "Write a Ghost farewell letter. Voice: Light-forged AI companion, quiet and earned. "
     "Second person (you/your). 120–150 words. Reference their class, at least one era they were "
@@ -87,7 +179,12 @@ GHOST_SYSTEM_PROMPT = (
     "Write a What Defined You verdict. Voice: neutral analytical narrator, third person. "
     "50–70 words. Start with the guardian's name. State the single activity they most over-indexed "
     "on relative to the average player. Reference the exact numbers that prove it. "
-    "Name their Destiny identity explicitly and declaratively — not 'seemed to enjoy' but 'was defined by'."
+    "Name their Destiny identity explicitly and declaratively — not 'seemed to enjoy' but 'was defined by'.\n\n"
+    "[NUMBER]\n"
+    "Pick the single most surprising or emotionally resonant stat from the data. "
+    "Write exactly 2 sentences. First sentence states the raw number in context. "
+    "Second sentence reframes its scale to make it personal and human. "
+    "Example: 'You died 90,259 times. And got up 90,259 times.' No markdown."
 )
 
 
@@ -133,10 +230,21 @@ class EraActivity(BaseModel):
     monthsActive: int
 
 
+class FireteamCompanion(BaseModel):
+    displayName: str
+    raidsTogetherSampled: int   # count from the sampled PGCRs, not full career
+
+
 class PrestigeAchievement(BaseModel):
     name: str
     description: str
     tier: int         # 1–5
+
+
+class ArchetypeEntry(BaseModel):
+    name: str
+    tier: int         # 1–5
+    description: str
 
 
 class CapsuleResponse(BaseModel):
@@ -165,6 +273,9 @@ class CapsuleResponse(BaseModel):
     monthlyData: list[MonthlyPoint]
     prestigeAchievement: PrestigeAchievement | None = None
     verdict: str
+    surpriseStat: str
+    qualifiedArchetypes: list[ArchetypeEntry]
+    fireteamCompanions: list[FireteamCompanion]
 
 
 # ── Stat helpers ────────────────────────────────────────────────────────────────
@@ -191,7 +302,7 @@ def _period_to_era(period: str) -> str:
     return "The Final Shape"
 
 
-def _calculate_archetype(
+def _calculate_archetypes(
     raids: int,
     nightfalls: int,
     pvp_matches: int,
@@ -199,24 +310,17 @@ def _calculate_archetype(
     pvp_wins: int,
     hours: float,
     titles: list[str],
-) -> str:
-    if raids >= 100:
-        return "Vault Conqueror"
-    if pvp_kd >= 2.0 and pvp_matches >= 500:
-        return "Crucible Legend"
-    if raids >= 30:
-        return "Raid Veteran"
-    if nightfalls >= 200:
-        return "Nightfall Master"
-    if pvp_wins >= 1000:
-        return "Iron Survivor"
-    if len(titles) >= 5:
-        return "The Titled"
-    if hours >= 3000:
-        return "The Dedicated"
-    if hours >= 1000:
-        return "Veteran Guardian"
-    return "Guardian"
+) -> list[ArchetypeEntry]:
+    """Return every archetype the player qualifies for, sorted by tier descending."""
+    qualified: list[ArchetypeEntry] = []
+    for defn in ARCHETYPES:
+        try:
+            if defn.unlock(raids, nightfalls, pvp_matches, pvp_kd, pvp_wins, hours, titles):
+                qualified.append(ArchetypeEntry(name=defn.name, tier=defn.tier, description=defn.description))
+        except Exception:
+            continue
+    qualified.sort(key=lambda a: -a.tier)
+    return qualified
 
 
 def _find_rarest_achievement(titles: list[str]) -> PrestigeAchievement | None:
@@ -281,18 +385,21 @@ def _compute_era_chart(monthly_data_list: list) -> tuple[list[MonthlyPoint], lis
 # ── Async helpers ───────────────────────────────────────────────────────────────
 
 
-async def _find_first_last_raid(
+async def _analyze_raid_history(
     char_ids: list[str],
     membership_type: int,
     membership_id: str,
     access_token: str,
-) -> tuple[str | None, str | None]:
-    """Paginate raid activity history across all characters to find first and last clear dates."""
+) -> tuple[str | None, str | None, list[str]]:
+    """Scan raid history for all characters.
+    Returns (first_clear_date, last_clear_date, recent_instance_ids).
+    Collects the 20 most recent completed instance IDs per character for PGCR sampling."""
 
-    async def scan_char(char_id: str) -> tuple[str | None, str | None]:
+    async def scan_char(char_id: str) -> tuple[str | None, str | None, list[str]]:
         oldest: str | None = None
         newest: str | None = None
-        for page in range(15):  # 15 pages × 250 = 3750 activities per character max
+        instances: list[str] = []
+        for page in range(15):
             try:
                 hist = await bungie_api.get_activity_history(
                     membership_type, membership_id, char_id, access_token,
@@ -300,9 +407,17 @@ async def _find_first_last_raid(
                 )
             except Exception:
                 break
-            activities = hist.get("activities", [])
+            activities = hist.get("activities") or []
             if not activities:
                 break
+            if page == 0:
+                first = activities[0]
+                print(
+                    f"[raid-history] char {char_id[:6]}… page 0: {len(activities)} activities | "
+                    f"first: period={first.get('period', '')[:10]}, "
+                    f"completed={first.get('values', {}).get('completed', {}).get('basic', {}).get('value')}, "
+                    f"instanceId={first.get('activityDetails', {}).get('instanceId')}"
+                )
             for act in activities:
                 completed = (
                     act.get("values", {})
@@ -310,21 +425,95 @@ async def _find_first_last_raid(
                     .get("basic", {})
                     .get("value", 0)
                 )
-                if completed == 1:
+                if float(completed) >= 0.5:
                     date = act.get("period", "")
                     if date:
                         if newest is None or date > newest:
                             newest = date
                         if oldest is None or date < oldest:
                             oldest = date
+                    iid = str(act.get("activityDetails", {}).get("instanceId", ""))
+                    if iid and iid != "0" and len(instances) < 20:
+                        instances.append(iid)
             if len(activities) < 250:
                 break
-        return oldest, newest
+        return oldest, newest, instances
 
     results = await asyncio.gather(*[scan_char(cid) for cid in char_ids], return_exceptions=True)
     all_oldest = [r[0] for r in results if not isinstance(r, Exception) and r[0]]
     all_newest = [r[1] for r in results if not isinstance(r, Exception) and r[1]]
-    return (min(all_oldest) if all_oldest else None, max(all_newest) if all_newest else None)
+
+    seen: set[str] = set()
+    unique_instances: list[str] = []
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        for iid in r[2]:
+            if iid not in seen:
+                seen.add(iid)
+                unique_instances.append(iid)
+
+    print(f"[raid-history] collected {len(unique_instances)} unique instance IDs")
+    return (
+        min(all_oldest) if all_oldest else None,
+        max(all_newest) if all_newest else None,
+        unique_instances[:30],
+    )
+
+
+async def _find_fireteam_companions(
+    instance_ids: list[str],
+    own_membership_id: str,
+) -> list[FireteamCompanion]:
+    """Fetch PGCRs for sampled raid instances and rank fireteam companions by frequency."""
+    if not instance_ids:
+        print(f"[fireteam] no instance IDs collected — companions will be empty")
+        return []
+
+    print(f"[fireteam] fetching {len(instance_ids)} PGCRs for instances: {instance_ids[:3]}...")
+
+    # Bungie rate-limits burst requests; cap concurrency to avoid 429s
+    semaphore = asyncio.Semaphore(5)
+
+    async def fetch_pgcr(iid: str) -> dict:
+        async with semaphore:
+            return await bungie_api.get_pgcr(iid)
+
+    pgcr_results = await asyncio.gather(
+        *[fetch_pgcr(iid) for iid in instance_ids],
+        return_exceptions=True,
+    )
+
+    errors = sum(1 for r in pgcr_results if isinstance(r, Exception))
+    print(f"[fireteam] PGCR results: {len(pgcr_results) - errors} ok, {errors} errors")
+    if errors:
+        sample_err = next(r for r in pgcr_results if isinstance(r, Exception))
+        print(f"[fireteam] sample error: {sample_err}")
+
+    counts: dict[str, tuple[str, int]] = {}  # membershipId -> (displayName, appearances)
+    for result in pgcr_results:
+        if isinstance(result, Exception) or not isinstance(result, dict):
+            continue
+        for entry in result.get("entries", []):
+            user_info = entry.get("player", {}).get("destinyUserInfo", {})
+            mid = str(user_info.get("membershipId", ""))
+            if not mid or mid == own_membership_id:
+                continue
+            global_name = user_info.get("bungieGlobalDisplayName", "")
+            code = user_info.get("bungieGlobalDisplayNameCode")
+            if global_name:
+                name = f"{global_name}#{code:04d}" if code else global_name
+            else:
+                name = user_info.get("displayName") or "Unknown Guardian"
+            prev_name, prev_count = counts.get(mid, (name, 0))
+            counts[mid] = (prev_name, prev_count + 1)
+
+    print(f"[fireteam] found {len(counts)} unique companions")
+    companions = sorted(
+        [FireteamCompanion(displayName=n, raidsTogetherSampled=c) for _, (n, c) in counts.items()],
+        key=lambda x: -x.raidsTogetherSampled,
+    )
+    return companions[:5]
 
 
 async def _lookup_titles(title_hashes: set[int]) -> list[str]:
@@ -399,27 +588,59 @@ async def _build_season_timeline(
     return entries
 
 
-async def _generate_ghost_and_verdict(stats_context: str) -> tuple[str, str]:
+def _parse_section(text: str, header: str, all_headers: list[str]) -> str:
+    if header not in text:
+        return ""
+    start = text.index(header) + len(header)
+    remaining = text[start:]
+    end = len(remaining)
+    for h in all_headers:
+        if h != header and h in remaining:
+            end = min(end, remaining.index(h))
+    return remaining[:end].strip()
+
+
+async def _generate_ghost_verdict_number(stats_context: str) -> tuple[str, str, str]:
+    """Returns (ghost_narrative, verdict, surprise_stat)."""
+    headers = ["[GHOST]", "[VERDICT]", "[NUMBER]"]
     try:
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         response = await asyncio.to_thread(
             client.messages.create,
             model="claude-sonnet-4-6",
-            max_tokens=600,
+            max_tokens=800,
             system=GHOST_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": stats_context}],
         )
         text = response.content[0].text
-        ghost = text
-        verdict = ""
-        if "[GHOST]" in text and "[VERDICT]" in text:
-            ghost_start = text.index("[GHOST]") + 7
-            verdict_start = text.index("[VERDICT]")
-            ghost = text[ghost_start:verdict_start].strip()
-            verdict = text[verdict_start + 9:].strip()
-        return ghost, verdict
+        return (
+            _parse_section(text, "[GHOST]", headers),
+            _parse_section(text, "[VERDICT]", headers),
+            _parse_section(text, "[NUMBER]", headers),
+        )
     except Exception:
-        return "Your record speaks for itself, Guardian.", ""
+        return "Your record speaks for itself, Guardian.", "", ""
+
+
+# ── Image proxy ─────────────────────────────────────────────────────────────────
+
+
+@router.get("/proxy-image")
+async def proxy_image(url: str = Query(...)):
+    """Proxy bungie.net static assets so html2canvas sees them as same-origin."""
+    if not url.startswith("https://www.bungie.net/"):
+        raise HTTPException(status_code=400, detail="Only bungie.net URLs allowed")
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, timeout=10.0)
+            res.raise_for_status()
+        return HTTPResponse(
+            content=res.content,
+            media_type=res.headers.get("content-type", "image/png"),
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception:
+        raise HTTPException(status_code=502, detail="Failed to fetch image")
 
 
 # ── Endpoint ────────────────────────────────────────────────────────────────────
@@ -502,7 +723,7 @@ async def get_capsule(
               for cid in char_ids],
             return_exceptions=True,
         ),
-        _find_first_last_raid(char_ids, membership_type, membership_id, access_token),
+        _analyze_raid_history(char_ids, membership_type, membership_id, access_token),
         _build_season_timeline(season_hashes, versions_owned),
         _lookup_titles(title_hashes),
     )
@@ -529,7 +750,7 @@ async def get_capsule(
     monthly_points, era_activity = _compute_era_chart(monthly_data_list)
 
     # Raid bookend timestamps
-    first_raid_date, last_raid_date = bookend_dates
+    first_raid_date, last_raid_date, raid_instance_ids = bookend_dates
     first_char_date: str | None = min(
         (c.get("dateCreated", "") for c in chars_raw.values() if c.get("dateCreated")),
         default=None,
@@ -549,9 +770,10 @@ async def get_capsule(
     start_year = SEASON_START_YEAR.get(first_season_number, 2017)
     years_active = datetime.now(timezone.utc).year - start_year
 
-    archetype = _calculate_archetype(
+    qualified_archetypes = _calculate_archetypes(
         raids_cleared, nightfalls_cleared, pvp_matches, pvp_kd, pvp_wins, hours_played, titles,
     )
+    archetype = qualified_archetypes[0].name if qualified_archetypes else "Guardian"
     prestige = _find_rarest_achievement(titles)
     primary_class = next((c.className for c in characters if c.isPrimary), "Guardian")
     active_era_names = list({s.era for s in active_seasons})
@@ -573,7 +795,11 @@ async def get_capsule(
         f"- Titles earned: {', '.join(titles) if titles else 'none'}\n"
         + (f"- Rarest title: {prestige.name} (tier {prestige.tier}/5)\n" if prestige else "")
     )
-    ghost_narrative, verdict = await _generate_ghost_and_verdict(stats_context)
+    # Wave 3: PGCR fetches + Claude run in parallel (both depend on Wave 2 results)
+    (ghost_narrative, verdict, surprise_stat), fireteam_companions = await asyncio.gather(
+        _generate_ghost_verdict_number(stats_context),
+        _find_fireteam_companions(raid_instance_ids, membership_id),
+    )
 
     return CapsuleResponse(
         guardianName=guardian_name,
@@ -601,4 +827,7 @@ async def get_capsule(
         monthlyData=monthly_points,
         prestigeAchievement=prestige,
         verdict=verdict,
+        surpriseStat=surprise_stat,
+        qualifiedArchetypes=qualified_archetypes,
+        fireteamCompanions=fireteam_companions,
     )

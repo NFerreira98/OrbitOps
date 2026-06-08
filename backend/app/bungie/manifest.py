@@ -137,13 +137,73 @@ class ManifestManager:
     async def get_item(self, item_hash: int):
         if not self.db_path:
             return None
-            
+
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
-                "SELECT json FROM DestinyInventoryItemDefinition WHERE id = ? OR id = ?", 
+                "SELECT json FROM DestinyInventoryItemDefinition WHERE id = ? OR id = ?",
                 (item_hash, item_hash - 4294967296) # Handle signed 32-bit int cast
             )
             row = await cursor.fetchone()
             if row:
                 return row[0]
             return None
+
+    async def get_items_batch(self, hashes: list[int]) -> list[str]:
+        """Batch-fetch item definitions for a list of hashes. Returns raw JSON strings."""
+        if not self.db_path or not hashes:
+            return []
+        # Each hash needs its signed-int counterpart to handle Bungie's 32-bit cast
+        all_ids: list[int] = []
+        for h in hashes:
+            all_ids.append(h)
+            signed = h - 4294967296
+            if signed != h:
+                all_ids.append(signed)
+        placeholders = ",".join("?" * len(all_ids))
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"SELECT json FROM DestinyInventoryItemDefinition WHERE id IN ({placeholders})",
+                tuple(all_ids),
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]
+
+    async def get_activity(self, activity_hash: int) -> str | None:
+        if not self.db_path:
+            return None
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT json FROM DestinyActivityDefinition WHERE id = ? OR id = ?",
+                (activity_hash, activity_hash - 4294967296),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+    async def get_milestone(self, milestone_hash: int) -> str | None:
+        if not self.db_path:
+            return None
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "SELECT json FROM DestinyMilestoneDefinition WHERE id = ? OR id = ?",
+                (milestone_hash, milestone_hash - 4294967296),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+    async def get_milestones_batch(self, hashes: list[int]) -> list[str]:
+        if not self.db_path or not hashes:
+            return []
+        all_ids: list[int] = []
+        for h in hashes:
+            all_ids.append(h)
+            signed = h - 4294967296
+            if signed != h:
+                all_ids.append(signed)
+        placeholders = ",".join("?" * len(all_ids))
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"SELECT json FROM DestinyMilestoneDefinition WHERE id IN ({placeholders})",
+                tuple(all_ids),
+            )
+            rows = await cursor.fetchall()
+            return [row[0] for row in rows]

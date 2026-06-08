@@ -6,6 +6,14 @@ import { LogOut, Loader2, Send } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { GearCard, type GearItem } from '../components/GearCard';
 import { TimeCapsule } from '../components/TimeCapsule';
+import { FireteamAdvisor } from '../components/FireteamAdvisor';
+import { VaultCleaner } from '../components/VaultCleaner';
+import { SwapPanel } from '../components/SwapPanel';
+import { Pathfinder } from '../components/Pathfinder';
+import { StatsDashboard } from '../components/StatsDashboard';
+import { WeeklyReset } from '../components/WeeklyReset';
+import { RecentActivity } from '../components/RecentActivity';
+import { PlayerSearch } from '../components/PlayerSearch';
 import type { CapsuleData } from '../types/capsule';
 
 export function cn(...inputs: ClassValue[]) {
@@ -27,6 +35,7 @@ interface ChatMessage {
 interface Character {
   characterId: string;
   className: string;
+  subclassName: string | null;
   light: number;
   emblemPath: string | null;
   emblemBackgroundPath: string | null;
@@ -37,7 +46,7 @@ const WEAPON_SLOTS = ['Kinetic', 'Energy', 'Power'];
 const ARMOR_SLOTS  = ['Helmet', 'Gauntlets', 'Chest', 'Legs', 'Class Item'];
 
 export function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'roster' | 'fireside' | 'capsule' | 'fonts'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'advisor' | 'guide' | 'vault' | 'fireside' | 'capsule' | 'weekly' | 'lookup'>('roster');
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
   const [loadoutLoading, setLoadoutLoading] = useState(false);
@@ -54,6 +63,9 @@ export function Dashboard() {
   const [capsuleData, setCapsuleData] = useState<CapsuleData | null>(null);
   const [capsuleLoading, setCapsuleLoading] = useState(false);
   const [capsuleError, setCapsuleError] = useState<string | null>(null);
+
+  // Swap panel state
+  const [swapItem, setSwapItem] = useState<GearItem | null>(null);
 
   const navigate = useNavigate();
   const { accessToken, displayName, primaryMembership, logout, isAuthenticated } = useAuthStore();
@@ -212,7 +224,7 @@ export function Dashboard() {
             OrbitOps<span className="text-slate-500 ml-2 font-rajdhani">// Terminal</span>
           </h1>
           <nav className="flex space-x-4 items-end">
-            {(['roster', 'fireside', 'capsule', 'fonts'] as const).map((tab) => (
+            {(['roster', 'advisor', 'guide', 'vault', 'fireside', 'capsule', 'weekly', 'lookup'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -284,6 +296,11 @@ export function Dashboard() {
                       <span className="font-rajdhani text-xs text-destiny-accent tracking-widest">
                         ✦ {char.light}
                       </span>
+                      {char.subclassName && (
+                        <span className="font-rajdhani text-[9px] uppercase tracking-widest text-slate-500">
+                          {char.subclassName}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -297,7 +314,7 @@ export function Dashboard() {
                       <div className="flex flex-col gap-2">
                         {selectedChar.gear
                           .filter((g) => WEAPON_SLOTS.includes(g.slot))
-                          .map((item) => <GearCard key={item.itemHash} item={item} />)}
+                          .map((item) => <GearCard key={item.itemHash} item={item} onSwapClick={setSwapItem} />)}
                       </div>
                     </div>
 
@@ -307,22 +324,83 @@ export function Dashboard() {
                       <div className="flex flex-col gap-2">
                         {selectedChar.gear
                           .filter((g) => ARMOR_SLOTS.includes(g.slot))
-                          .map((item) => <GearCard key={item.itemHash} item={item} />)}
+                          .map((item) => <GearCard key={item.itemHash} item={item} onSwapClick={setSwapItem} />)}
                       </div>
                     </div>
 
-                    {/* Ghost */}
-                    {selectedChar.gear.filter((g) => g.slot === 'Ghost').map((item) => (
-                      <div key={item.itemHash} className="lg:col-span-2">
-                        <h3 className="font-rajdhani uppercase tracking-widest text-xs text-slate-500 mb-3">Ghost</h3>
-                        <GearCard item={item} />
-                      </div>
-                    ))}
+                    {/* Ghost + Ship */}
+                    {(['Ghost', 'Ship'] as const).map(slotName => {
+                      const items = selectedChar.gear.filter(g => g.slot === slotName);
+                      if (!items.length) return null;
+                      return (
+                        <div key={slotName} className="lg:col-span-2">
+                          <h3 className="font-rajdhani uppercase tracking-widest text-xs text-slate-500 mb-3">{slotName}</h3>
+                          {items.map(item => <GearCard key={item.itemHash} item={item} onSwapClick={setSwapItem} />)}
+                        </div>
+                      );
+                    })}
                   </div>
+                )}
+
+                {/* Swap panel */}
+                {swapItem && primaryMembership && accessToken && (
+                  <SwapPanel
+                    equippedItem={swapItem}
+                    membershipType={primaryMembership.membershipType}
+                    membershipId={primaryMembership.membershipId}
+                    accessToken={accessToken}
+                    onClose={() => setSwapItem(null)}
+                    onEquipped={() => {
+                      setSwapItem(null);
+                      setCharacters([]);  // triggers loadout re-fetch via useEffect
+                    }}
+                  />
+                )}
+
+                {/* Recent activity */}
+                {primaryMembership && accessToken && (
+                  <RecentActivity
+                    membershipType={primaryMembership.membershipType}
+                    membershipId={primaryMembership.membershipId}
+                    accessToken={accessToken}
+                  />
                 )}
               </div>
             )}
           </div>
+        )}
+
+        {/* ── ADVISOR TAB ── */}
+        {activeTab === 'advisor' && primaryMembership && accessToken && (
+          <FireteamAdvisor
+            membershipType={primaryMembership.membershipType}
+            membershipId={primaryMembership.membershipId}
+            accessToken={accessToken}
+          />
+        )}
+
+        {/* ── GUIDE TAB ── */}
+        {activeTab === 'guide' && primaryMembership && accessToken && (
+          <Pathfinder
+            membershipType={primaryMembership.membershipType}
+            membershipId={primaryMembership.membershipId}
+            accessToken={accessToken}
+            onOpenAdvisor={(activityId) => {
+              setActiveTab('advisor');
+              // FireteamAdvisor reads its own activity list on mount; pre-selection
+              // is handled via sessionStorage so the component can pick it up.
+              sessionStorage.setItem('pathfinder_activity', activityId);
+            }}
+          />
+        )}
+
+        {/* ── VAULT TAB ── */}
+        {activeTab === 'vault' && primaryMembership && accessToken && (
+          <VaultCleaner
+            membershipType={primaryMembership.membershipType}
+            membershipId={primaryMembership.membershipId}
+            accessToken={accessToken}
+          />
         )}
 
         {/* ── FIRESIDE TAB ── */}
@@ -437,10 +515,25 @@ export function Dashboard() {
         )}
 
         {/* ── CAPSULE TAB ── */}
-        {activeTab === 'capsule' && (
-          <div>
+        {activeTab === 'capsule' && primaryMembership && accessToken && (
+          <div className="space-y-16">
+            {/* Stats dashboard — front and centre */}
+            <StatsDashboard
+              membershipType={primaryMembership.membershipType}
+              membershipId={primaryMembership.membershipId}
+              accessToken={accessToken}
+            />
+
+            {/* Divider */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-white/6" />
+              <span className="font-rajdhani text-[9px] uppercase tracking-widest text-slate-700">Time Capsule</span>
+              <div className="flex-1 h-px bg-white/6" />
+            </div>
+
+            {/* Capsule narrative */}
             {capsuleLoading && (
-              <div className="flex flex-col items-center justify-center py-24 gap-4 text-slate-500">
+              <div className="flex flex-col items-center justify-center py-16 gap-4 text-slate-500">
                 <Loader2 className="animate-spin" size={24} />
                 <div className="text-center">
                   <p className="font-rajdhani uppercase tracking-widest text-sm">Compiling your record…</p>
@@ -457,22 +550,11 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* ── FONTS TAB ── */}
-        {activeTab === 'fonts' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {[
-              { label: 'Inter (UI base)', font: 'font-inter', text: '"Eyes up, Guardian." Clean, readable base for stats, readouts, and body text.' },
-              { label: 'Cinzel (Lore titles)', font: 'font-cinzel', text: 'Whether we wanted it or not, we\'ve stepped into a war with the Cabal.' },
-              { label: 'Rajdhani (Tactical UI)', font: 'font-rajdhani font-semibold text-2xl uppercase tracking-wider', text: 'Vanguard Operations // Sub-routine Initiated.' },
-              { label: 'Futura (Heavy headers)', font: 'font-futura font-bold text-xl tracking-wider uppercase', text: 'Destiny 2 Title Card Style.' },
-            ].map(({ label, font, text }) => (
-              <div key={label} className="p-6 bg-destiny-panel border border-destiny-border clip-chamfer backdrop-blur-md">
-                <h2 className="text-sm tracking-widest text-destiny-accent mb-2 uppercase">{label}</h2>
-                <p className={cn('text-slate-200 leading-relaxed', font)}>{text}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* ── WEEKLY TAB ── */}
+        {activeTab === 'weekly' && <WeeklyReset />}
+
+        {/* ── LOOKUP TAB ── */}
+        {activeTab === 'lookup' && <PlayerSearch />}
 
       </main>
     </div>

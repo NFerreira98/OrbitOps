@@ -88,9 +88,6 @@ async def get_loadout(
     instances_data  = profile.get("itemComponents", {}).get("instances", {}).get("data", {})
     sockets_data    = profile.get("itemComponents", {}).get("sockets", {}).get("data", {})
 
-    print(f"[loadout] profile keys: {list(profile.keys())}")
-    print(f"[loadout] characterEquipment raw: {profile.get('characterEquipment')}")
-    print(f"[loadout] characters={len(characters_data)} equipment={len(equipment_data)}")
 
     # Batch-fetch ALL plug definitions up front (one DB query for all characters)
     all_plug_hashes: set[int] = set()

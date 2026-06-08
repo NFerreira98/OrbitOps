@@ -11,8 +11,18 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 class ManifestManager:
     def __init__(self):
         os.makedirs(DATA_DIR, exist_ok=True)
-        existing = sorted(DATA_DIR.glob("*.content"))
-        self.db_path = existing[0] if existing else None
+        self._db_path: Path | None = None
+
+    @property
+    def db_path(self) -> Path | None:
+        if self._db_path is None:
+            existing = sorted(DATA_DIR.glob("*.content"))
+            self._db_path = existing[0] if existing else None
+        return self._db_path
+
+    @db_path.setter
+    def db_path(self, value: Path | None) -> None:
+        self._db_path = value
         
     async def get_manifest_info(self):
         async with httpx.AsyncClient() as client:

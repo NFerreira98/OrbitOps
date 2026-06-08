@@ -19,8 +19,9 @@ body {
   background-color: var(--color-destiny-dark);
   color: white;
   margin: 0;
-  /* Subtle hex grid pattern */
+  /* Subtle hex grid pattern — fixed so it doesn't tile past viewport edges on mobile */
   background-image: url("data:image/svg+xml,%3Csvg width='40' height='69' viewBox='0 0 40 69' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 0l20 11.5v23L20 46 0 34.5v-23L20 0zm0 69l20-11.5v-23L20 23 0 34.5v23L20 69z' fill='rgba(255, 255, 255, 0.02)' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-attachment: fixed;
 }
 
 /* Custom utility for sharp cut corners (chamfered) common in Destiny UI */

@@ -476,39 +476,57 @@ export function Dashboard() {
             </div>
 
             {/* Input row */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChat()}
-                placeholder="Speak, Guardian…"
-                disabled={chatStreaming}
-                className="flex-1 bg-destiny-panel border border-amber-900/30 text-slate-200 placeholder-amber-900/40 font-inter px-4 py-3 text-sm focus:outline-none focus:border-amber-700/50 transition-colors disabled:opacity-50"
-              />
-              <div className="flex border border-amber-900/30 overflow-hidden">
+            <div className="flex flex-col gap-1">
+              <div className="flex border border-amber-900/30 overflow-hidden self-start md:hidden">
                 {(['story', 'tldr'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setChatMode(m)}
                     className={cn(
-                      'px-3 py-3 font-rajdhani text-[11px] uppercase tracking-widest transition-colors',
+                      'px-3 py-2 font-rajdhani text-[11px] uppercase tracking-widest transition-colors',
                       chatMode === m
                         ? 'bg-amber-900/40 text-amber-400'
                         : 'bg-destiny-panel text-amber-800/50 hover:text-amber-700/70'
                     )}
                   >
-                    {m}
+                    {m === 'tldr' ? 'TL;DR — Quick answer' : 'Story — Full lore'}
                   </button>
                 ))}
               </div>
-              <button
-                onClick={sendChat}
-                disabled={chatStreaming || !chatInput.trim()}
-                className="px-4 py-3 bg-destiny-ember border border-destiny-ember-border text-amber-500/70 hover:text-amber-400 hover:bg-amber-900/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {chatStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChat()}
+                  placeholder="Speak, Guardian…"
+                  disabled={chatStreaming}
+                  className="flex-1 bg-destiny-panel border border-amber-900/30 text-slate-200 placeholder-amber-900/40 font-inter px-4 py-3 text-sm focus:outline-none focus:border-amber-700/50 transition-colors disabled:opacity-50"
+                />
+                <div className="hidden md:flex border border-amber-900/30 overflow-hidden">
+                  {(['story', 'tldr'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setChatMode(m)}
+                      className={cn(
+                        'px-3 py-3 font-rajdhani text-[11px] uppercase tracking-widest transition-colors',
+                        chatMode === m
+                          ? 'bg-amber-900/40 text-amber-400'
+                          : 'bg-destiny-panel text-amber-800/50 hover:text-amber-700/70'
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={sendChat}
+                  disabled={chatStreaming || !chatInput.trim()}
+                  className="px-4 py-3 bg-destiny-ember border border-destiny-ember-border text-amber-500/70 hover:text-amber-400 hover:bg-amber-900/40 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {chatStreaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
+              </div>
             </div>
           </div>
         )}

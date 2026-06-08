@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Search, X } from 'lucide-react';
+import { Loader2, Play, Search, X } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -338,6 +338,20 @@ function ItemCard({ item, tier }: { item: CatalogItem; tier: number }) {
           <p className="font-inter text-[11px] text-slate-700 mt-1 italic">
             Source unknown
           </p>
+        )}
+
+        {/* Showcase link — exotics only */}
+        {isExotic && (
+          <a
+            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.name + ' destiny 2 exotic')}&sp=EgIQAg%3D%3D`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 mt-2 font-rajdhani text-[10px] uppercase tracking-widest text-red-500/60 hover:text-red-400 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Play size={9} className="fill-current" />
+            Watch showcase
+          </a>
         )}
       </div>
     </div>

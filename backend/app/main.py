@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -23,9 +24,37 @@ from app.api.player_search import router as player_router
 
 manifest_manager = ManifestManager()
 
+
+async def _ingest_lore_if_needed() -> None:
+    """Run lore ingest in background if ChromaDB is empty. Fire-and-forget from lifespan."""
+    if not os.getenv("OPENAI_API_KEY"):
+        return
+    try:
+        import chromadb
+        chroma = chromadb.PersistentClient(path=str(Path("data/chroma")))
+        col = chroma.get_or_create_collection("destiny_lore")
+        if col.count() > 0:
+            print(f"[lore] ChromaDB ready: {col.count()} entries.")
+            return
+        print("[lore] ChromaDB empty — starting lore ingest (this takes ~5 min)...")
+        proc = await asyncio.create_subprocess_exec(
+            "python", "-m", "app.rag.ingest",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode == 0:
+            print("[lore] Ingest complete.")
+        else:
+            print(f"[lore] Ingest failed:\n{stdout.decode()}")
+    except Exception as e:
+        print(f"[lore] Ingest check error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await manifest_manager.init_manifest()
+    asyncio.create_task(_ingest_lore_if_needed())
     yield
 
 app = FastAPI(title="OrbitOps Backend", lifespan=lifespan)

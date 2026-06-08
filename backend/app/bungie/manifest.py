@@ -37,22 +37,22 @@ class ManifestManager:
                 return
             
             print(f"Downloading manifest from {BUNGIE_ROOT}{mobile_world_content_path}...")
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
                 async with client.stream("GET", f"{BUNGIE_ROOT}{mobile_world_content_path}") as r:
                     r.raise_for_status()
                     with open(local_zip_path, "wb") as f:
                         async for chunk in r.aiter_bytes():
                             f.write(chunk)
-                            
+
             print("Extracting manifest...")
             with zipfile.ZipFile(local_zip_path, 'r') as zip_ref:
-                # The zip typically contains a single file which is the sqlite DB
                 zip_ref.extractall(DATA_DIR)
-                
+
             os.remove(local_zip_path)
-            print("Manifest downloaded and extracted.")
+            print("Manifest downloaded and extracted successfully.")
         except Exception as e:
-            print(f"Failed to initialize manifest: {e}")
+            print(f"ERROR: Failed to initialize manifest: {e}")
+            raise
             
     async def get_lore(self, lore_hash: int):
         if not self.db_path:

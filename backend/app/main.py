@@ -66,5 +66,5 @@ if STATIC_DIR.exists():
         app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
     @app.get("/{full_path:path}")
-    async def spa_fallback(_full_path: str):
+    async def spa_fallback(full_path: str = ""):
         return FileResponse(str(STATIC_DIR / "index.html"))

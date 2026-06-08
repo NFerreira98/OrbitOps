@@ -77,7 +77,7 @@ export function Dashboard() {
   useEffect(() => {
     if (activeTab !== 'roster' || !accessToken || !primaryMembership) return;
 
-    if (characters.length > 0) return; // already loaded
+    if (characters.length > 0 && characters.some(c => c.gear.length > 0)) return;
 
     const fetchLoadout = async () => {
       setLoadoutLoading(true);

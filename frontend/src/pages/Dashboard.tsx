@@ -10,6 +10,7 @@ import { FireteamAdvisor } from '../components/FireteamAdvisor';
 import { VaultCleaner } from '../components/VaultCleaner';
 import { SwapPanel } from '../components/SwapPanel';
 import { Pathfinder } from '../components/Pathfinder';
+import { ItemCatalog } from '../components/ItemCatalog';
 import { StatsDashboard } from '../components/StatsDashboard';
 import { WeeklyReset } from '../components/WeeklyReset';
 import { RecentActivity } from '../components/RecentActivity';
@@ -63,6 +64,9 @@ export function Dashboard() {
   const [capsuleData, setCapsuleData] = useState<CapsuleData | null>(null);
   const [capsuleLoading, setCapsuleLoading] = useState(false);
   const [capsuleError, setCapsuleError] = useState<string | null>(null);
+
+  // Guide sub-section
+  const [guideSection, setGuideSection] = useState<'activities' | 'catalog'>('activities');
 
   // Swap panel state
   const [swapItem, setSwapItem] = useState<GearItem | null>(null);
@@ -380,17 +384,39 @@ export function Dashboard() {
 
         {/* ── GUIDE TAB ── */}
         {activeTab === 'guide' && primaryMembership && accessToken && (
-          <Pathfinder
-            membershipType={primaryMembership.membershipType}
-            membershipId={primaryMembership.membershipId}
-            accessToken={accessToken}
-            onOpenAdvisor={(activityId) => {
-              setActiveTab('advisor');
-              // FireteamAdvisor reads its own activity list on mount; pre-selection
-              // is handled via sessionStorage so the component can pick it up.
-              sessionStorage.setItem('pathfinder_activity', activityId);
-            }}
-          />
+          <div>
+            {/* Guide sub-navigation */}
+            <div className="flex gap-6 mb-8 border-b border-white/10 pb-3">
+              {(['activities', 'catalog'] as const).map((section) => (
+                <button
+                  key={section}
+                  onClick={() => setGuideSection(section)}
+                  className={cn(
+                    'font-rajdhani text-sm uppercase tracking-widest pb-1 border-b-2 transition-all',
+                    guideSection === section
+                      ? 'text-white border-destiny-accent'
+                      : 'text-slate-500 border-transparent hover:text-slate-300'
+                  )}
+                >
+                  {section === 'activities' ? 'Activities' : 'Item Catalog'}
+                </button>
+              ))}
+            </div>
+
+            {guideSection === 'activities' && (
+              <Pathfinder
+                membershipType={primaryMembership.membershipType}
+                membershipId={primaryMembership.membershipId}
+                accessToken={accessToken}
+                onOpenAdvisor={(activityId) => {
+                  setActiveTab('advisor');
+                  sessionStorage.setItem('pathfinder_activity', activityId);
+                }}
+              />
+            )}
+
+            {guideSection === 'catalog' && <ItemCatalog />}
+          </div>
         )}
 
         {/* ── VAULT TAB ── */}

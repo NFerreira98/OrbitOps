@@ -189,6 +189,94 @@ class ManifestManager:
             row = await cursor.fetchone()
             return row[0] if row else None
 
+    async def get_catalog_items(
+        self,
+        tier: int,
+        item_type: int | None = None,
+        class_type: int | None = None,
+        search: str | None = None,
+    ) -> list[dict]:
+        """Fetch catalog items by tier (5=Legendary, 6=Exotic) with optional filters.
+        Returns lightweight dicts extracted from the manifest (no full JSON blobs)."""
+        if not self.db_path:
+            return []
+
+        conditions = [
+            "json_extract(json, '$.inventory.tierType') = ?",
+            "json_extract(json, '$.itemType') IN (2, 3)",
+            "json_extract(json, '$.displayProperties.name') IS NOT NULL",
+            "json_extract(json, '$.displayProperties.name') != ''",
+            "json_extract(json, '$.displayProperties.name') != 'Classified'",
+            "(json_extract(json, '$.redacted') IS NULL OR json_extract(json, '$.redacted') = 0)",
+            "json_extract(json, '$.displayProperties.hasIcon') = 1",
+        ]
+        params: list = [tier]
+
+        if item_type is not None:
+            conditions.append("json_extract(json, '$.itemType') = ?")
+            params.append(item_type)
+
+        if class_type is not None:
+            conditions.append(
+                "(json_extract(json, '$.classType') = ? OR json_extract(json, '$.classType') = 3)"
+            )
+            params.append(class_type)
+
+        if search:
+            conditions.append(
+                "json_extract(json, '$.displayProperties.name') LIKE ?"
+            )
+            params.append(f"%{search}%")
+
+        where = " AND ".join(conditions)
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"""SELECT
+                    CAST(json_extract(json, '$.hash') AS INTEGER),
+                    json_extract(json, '$.displayProperties.name'),
+                    json_extract(json, '$.displayProperties.icon'),
+                    json_extract(json, '$.flavorText'),
+                    CAST(json_extract(json, '$.inventory.tierType') AS INTEGER),
+                    CAST(json_extract(json, '$.itemType') AS INTEGER),
+                    CAST(json_extract(json, '$.itemSubType') AS INTEGER),
+                    CAST(json_extract(json, '$.classType') AS INTEGER),
+                    CAST(json_extract(json, '$.collectibleHash') AS INTEGER)
+                FROM DestinyInventoryItemDefinition WHERE {where}""",
+                tuple(params),
+            )
+            rows = await cursor.fetchall()
+        return [
+            {
+                "hash": row[0],
+                "name": row[1] or "",
+                "icon": row[2],
+                "flavorText": row[3],
+                "tierType": row[4],
+                "itemType": row[5],
+                "itemSubType": row[6] or 0,
+                "classType": row[7] if row[7] is not None else 3,
+                "collectibleHash": row[8] or None,
+            }
+            for row in rows
+            if row[0]
+        ]
+
+    async def get_all_collectibles_with_source(self) -> dict[int, str]:
+        """Return {hash: sourceString} for all collectibles that have sourceString."""
+        if not self.db_path:
+            return {}
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                """SELECT
+                    CAST(json_extract(json, '$.hash') AS INTEGER),
+                    json_extract(json, '$.sourceString')
+                FROM DestinyCollectibleDefinition
+                WHERE json_extract(json, '$.sourceString') IS NOT NULL
+                AND json_extract(json, '$.sourceString') != ''"""
+            )
+            rows = await cursor.fetchall()
+        return {int(row[0]): row[1] for row in rows if row[0] and row[1]}
+
     async def get_milestone(self, milestone_hash: int) -> str | None:
         if not self.db_path:
             return None

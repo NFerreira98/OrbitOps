@@ -21,6 +21,7 @@ from app.api.stats import router as stats_router
 from app.api.weekly import router as weekly_router
 from app.api.recent import router as recent_router
 from app.api.player_search import router as player_router
+from app.api.catalog import router as catalog_router
 
 manifest_manager = ManifestManager()
 
@@ -82,6 +83,7 @@ app.include_router(stats_router)
 app.include_router(weekly_router)
 app.include_router(recent_router)
 app.include_router(player_router)
+app.include_router(catalog_router)
 
 @app.get("/health")
 def health():

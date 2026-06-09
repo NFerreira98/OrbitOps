@@ -1,5 +1,4 @@
 import asyncio
-import json
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
@@ -45,6 +44,24 @@ async def get_catalog(
         ),
         manifest.get_all_collectibles_with_source(),
     )
+
+    # Deduplicate by name — the manifest stores multiple version entries per item
+    # (original, perk-updated, sunset copies). Prefer the version with a collectibleHash
+    # since that's what the game actively tracks; break ties by highest hash (most recent).
+    deduped: dict[str, dict] = {}
+    for item in raw_items:
+        name = item["name"]
+        if name not in deduped:
+            deduped[name] = item
+        else:
+            prev = deduped[name]
+            has_col = bool(item.get("collectibleHash"))
+            prev_has_col = bool(prev.get("collectibleHash"))
+            if has_col and not prev_has_col:
+                deduped[name] = item
+            elif has_col == prev_has_col and item["hash"] > prev["hash"]:
+                deduped[name] = item
+    raw_items = list(deduped.values())
 
     items: list[CatalogItem] = []
     for item in raw_items:

@@ -343,7 +343,7 @@ function ItemCard({ item, tier }: { item: CatalogItem; tier: number }) {
         {/* Showcase link — exotics only */}
         {isExotic && (
           <a
-            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.name + ' destiny 2 exotic')}&sp=EgIQAg%3D%3D`}
+            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(item.name + ' destiny 2 exotic showcase')}&sp=EgQIAxAB`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 mt-2 font-rajdhani text-[10px] uppercase tracking-widest text-red-500/60 hover:text-red-400 transition-colors"
